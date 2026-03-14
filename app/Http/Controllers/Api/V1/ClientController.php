@@ -279,6 +279,15 @@ class ClientController extends Controller
     {
         $query = User::where('role', 'artisan')->where('account_status', 'active');
 
+        // ── Text search (name / email) ──
+        if ($request->filled('search')) {
+            $search = $request->input('search');
+            $query->where(function ($q) use ($search) {
+                $q->where('full_name', 'like', "%{$search}%")
+                   ->orWhere('email', 'like', "%{$search}%");
+            });
+        }
+
         if ($request->filled('categoryId')) {
             // Filter by artisans who have done jobs in this category
             $catId = $request->input('categoryId');
@@ -551,5 +560,70 @@ class ClientController extends Controller
             ->map->toApiArray()->toArray();
 
         return response()->json($jobs);
+    }
+
+    // ═══════════════════════════════════════════════════════
+    //  FAVORITES
+    // ═══════════════════════════════════════════════════════
+
+    public function favorites(Request $request): JsonResponse
+    {
+        $clientId = $request->user()->id;
+
+        $favorites = FavoriteArtisan::where('client_id', $clientId)
+            ->with('artisan')
+            ->latest()
+            ->get()
+            ->map(function (FavoriteArtisan $fav) {
+                $artisan = $fav->artisan;
+                if (!$artisan) return null;
+
+                $completedJobs = ServiceJob::where('artisan_id', $artisan->id)
+                    ->where('status', 'completed')->count();
+                $avgRating = Review::where('reviewee_id', $artisan->id)
+                    ->avg('rating') ?? 0;
+
+                return [
+                    'id'             => (string) $fav->id,
+                    'artisanId'      => (string) $artisan->id,
+                    'fullName'       => $artisan->full_name,
+                    'avatarUrl'      => $artisan->avatar_url,
+                    'rating'         => round($avgRating, 1),
+                    'completedJobs'  => $completedJobs,
+                    'location'       => $artisan->location,
+                    'isAvailable'    => true,
+                    'createdAt'      => $fav->created_at?->toIso8601String(),
+                ];
+            })->filter()->values()->toArray();
+
+        return response()->json($favorites);
+    }
+
+    public function toggleFavorite(Request $request): JsonResponse
+    {
+        $request->validate(['artisanId' => 'required|exists:users,id']);
+
+        $clientId  = $request->user()->id;
+        $artisanId = $request->input('artisanId');
+
+        $existing = FavoriteArtisan::where('client_id', $clientId)
+            ->where('artisan_id', $artisanId)->first();
+
+        if ($existing) {
+            $existing->delete();
+            return response()->json(['message' => 'Removed from favorites', 'isFavorite' => false]);
+        }
+
+        FavoriteArtisan::create(['client_id' => $clientId, 'artisan_id' => $artisanId]);
+        return response()->json(['message' => 'Added to favorites', 'isFavorite' => true]);
+    }
+
+    public function removeFavorite(Request $request, string $artisanId): JsonResponse
+    {
+        FavoriteArtisan::where('client_id', $request->user()->id)
+            ->where('artisan_id', $artisanId)
+            ->delete();
+
+        return response()->json(['message' => 'Removed from favorites']);
     }
 }

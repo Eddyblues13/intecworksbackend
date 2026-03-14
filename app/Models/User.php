@@ -94,6 +94,16 @@ class User extends Authenticatable
         return in_array($this->role, ['artisan', 'supplier']);
     }
 
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    public function adminActivityLogs()
+    {
+        return $this->hasMany(AdminActivityLog::class, 'admin_id');
+    }
+
     public function isPhoneVerified(): bool
     {
         return $this->phone_verified_at !== null;
