@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Models\Category;
+use App\Models\FavoriteArtisan;
 use App\Models\JobApplication;
 use App\Models\Payment;
 use App\Models\Quote;
@@ -12,6 +13,7 @@ use App\Models\ServiceJob;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use App\Services\EscrowService;
 
 class ClientController extends Controller
 {
@@ -194,6 +196,57 @@ class ClientController extends Controller
         return response()->json($serviceJob->toApiArray());
     }
 
+    public function updateJob(ServiceJob $serviceJob, Request $request): JsonResponse
+    {
+        if ($serviceJob->client_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (in_array($serviceJob->status, ['accepted', 'completed', 'closed', 'cancelled'])) {
+            return response()->json(['message' => 'Job cannot be modified in its current state.'], 422);
+        }
+
+        $data = $request->validate([
+            'categoryId'    => 'sometimes|exists:categories,id',
+            'subcategoryId' => 'nullable|exists:subcategories,id',
+            'jobType'       => 'sometimes|in:fixedPrice,custom',
+            'description'   => 'sometimes|string|min:10',
+            'images'        => 'nullable|array',
+            'images.*'      => 'string',
+            'location'      => 'sometimes|string',
+            'lat'           => 'nullable|numeric',
+            'lng'           => 'nullable|numeric',
+        ]);
+
+        if (isset($data['categoryId'])) $serviceJob->category_id = $data['categoryId'];
+        if (array_key_exists('subcategoryId', $data)) $serviceJob->subcategory_id = $data['subcategoryId'];
+        if (isset($data['jobType'])) $serviceJob->job_type = $data['jobType'];
+        if (isset($data['description'])) $serviceJob->description = $data['description'];
+        if (array_key_exists('images', $data)) $serviceJob->images = $data['images'];
+        if (isset($data['location'])) $serviceJob->location = $data['location'];
+        if (array_key_exists('lat', $data)) $serviceJob->lat = $data['lat'];
+        if (array_key_exists('lng', $data)) $serviceJob->lng = $data['lng'];
+
+        $serviceJob->save();
+
+        return response()->json($serviceJob->fresh()->toApiArray());
+    }
+
+    public function deleteJob(ServiceJob $serviceJob, Request $request): JsonResponse
+    {
+        if ($serviceJob->client_id !== $request->user()->id) {
+            return response()->json(['message' => 'Forbidden'], 403);
+        }
+
+        if (in_array($serviceJob->status, ['accepted', 'completed', 'closed'])) {
+            return response()->json(['message' => 'Job cannot be deleted in its current state.'], 422);
+        }
+
+        $serviceJob->delete();
+
+        return response()->json(['message' => 'Job deleted successfully.']);
+    }
+
     // ═══════════════════════════════════════════════════════
     //  JOB APPLICANTS
     // ═══════════════════════════════════════════════════════
@@ -253,7 +306,14 @@ class ClientController extends Controller
             'accepted_at' => now(),
         ]);
 
-        return response()->json(['message' => 'Artisan accepted.']);
+        // Create escrow — client must fund deposit before artisan begins
+        $escrowService = app(EscrowService::class);
+        $escrow = $escrowService->createEscrow($serviceJob->fresh());
+
+        return response()->json([
+            'message' => 'Artisan accepted. Please fund the escrow deposit.',
+            'escrow'  => $escrow->toApiArray(),
+        ]);
     }
 
     public function rejectArtisan(ServiceJob $serviceJob, Request $request): JsonResponse
@@ -370,7 +430,28 @@ class ClientController extends Controller
         ]);
         $job->update(['status' => 'quoteApproved']);
 
-        return response()->json(['message' => 'Quote approved.']);
+        // Calculate remaining escrow amount from quote
+        $escrowService = app(EscrowService::class);
+        $escrow = $escrowService->setRemainingFromQuote(
+            $job->id,
+            $quote->total_amount ?? 0,
+            $quote->material_total ?? 0
+        );
+        
+        // Notify Artisan
+        if ($job->artisan) {
+            $job->artisan->notify(new \App\Notifications\JobEventNotification(
+                'Quote Approved',
+                "Your quote was approved. You can start the work!",
+                $job->id,
+                'quote_approved'
+            ));
+        }
+
+        return response()->json([
+            'message' => 'Quote approved. Please fund the remaining escrow balance.',
+            'escrow'  => $escrow?->toApiArray(),
+        ]);
     }
 
     public function rejectQuote(Quote $quote, Request $request): JsonResponse
@@ -416,7 +497,24 @@ class ClientController extends Controller
             'completed_at' => now(),
         ]);
 
-        return response()->json(['message' => 'Job marked as completed.']);
+        // Release escrow funds to artisan (minus platform commission)
+        $escrowService = app(EscrowService::class);
+        $escrow = $escrowService->releaseFunds($serviceJob->id);
+        
+        // Notify Artisan
+        if ($serviceJob->artisan) {
+            $serviceJob->artisan->notify(new \App\Notifications\JobEventNotification(
+                'Work Completed Confirmed',
+                "The client confirmed the completion. Funds have been released.",
+                $serviceJob->id,
+                'completion_approved'
+            ));
+        }
+
+        return response()->json([
+            'message' => 'Job completed. Escrow funds released to artisan.',
+            'escrow'  => $escrow?->toApiArray(),
+        ]);
     }
 
     public function requestRevision(ServiceJob $serviceJob, Request $request): JsonResponse
@@ -627,3 +725,4 @@ class ClientController extends Controller
         return response()->json(['message' => 'Removed from favorites']);
     }
 }
+// NOTE: This is being appended incorrectly, I need to insert before the closing brace

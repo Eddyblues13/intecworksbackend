@@ -140,4 +140,27 @@ class ChatController extends Controller
         $chatMessage->update(['is_flagged' => true]);
         return response()->json(['message' => 'Message flagged.']);
     }
+    /**
+     * POST /chat/conversations/{chatThread}/meta
+     * Update thread metadata (called after Firestore message send).
+     */
+    public function updateThreadMeta(ChatThread $chatThread, Request $request): JsonResponse
+    {
+        $userId = $request->user()->id;
+
+        if (!$chatThread->hasParticipant($userId)) {
+            return response()->json(['message' => 'Not a participant.'], 403);
+        }
+
+        $request->validate([
+            'lastMessage' => 'required|string|max:255',
+        ]);
+
+        $chatThread->update([
+            'last_message'    => $request->lastMessage,
+            'last_message_at' => Carbon::now(),
+        ]);
+
+        return response()->json(['message' => 'Thread meta updated.']);
+    }
 }

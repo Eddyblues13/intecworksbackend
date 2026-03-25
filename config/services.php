@@ -37,4 +37,17 @@ return [
         'upload_preset' => env('CLOUDINARY_UPLOAD_PRESET'),
     ],
 
+    // ── Paystack ──
+    'paystack' => [
+        'secret_key' => env('PAYSTACK_SECRET_KEY'),
+        'public_key' => env('PAYSTACK_PUBLIC_KEY'),
+    ],
+
+    // ── Korapay ──
+    'korapay' => [
+        'secret_key'     => env('KORAPAY_SECRET_KEY'),
+        'public_key'     => env('KORAPAY_PUBLIC_KEY'),
+        'encryption_key' => env('KORAPAY_ENCRYPTION_KEY'),
+    ],
+
 ];

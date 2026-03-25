@@ -9,6 +9,10 @@ use App\Http\Controllers\Api\V1\AdminController;
 use App\Http\Controllers\Api\V1\SubscriptionController;
 use App\Http\Controllers\Api\V1\SupplierController;
 use App\Http\Controllers\Api\V1\ChatController;
+use App\Http\Controllers\Api\V1\EscrowController;
+use App\Http\Controllers\Api\V1\NotificationController;
+use App\Http\Controllers\Api\V1\PaystackController;
+use App\Http\Controllers\Api\V1\KoraPayController;
 use Illuminate\Support\Facades\Route;
 
 // ── API v1 ──
@@ -45,6 +49,7 @@ Route::prefix('v1')->group(function () {
 
         // Auth
         Route::post('/auth/refresh-token', [AuthController::class, 'refreshToken']);
+        Route::get('/auth/firebase-token', [AuthController::class, 'firebaseToken']);
         Route::post('/auth/logout',        [AuthController::class, 'logout']);
 
         // Cloudinary config (client-side upload)
@@ -71,6 +76,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/jobs',     [ClientController::class, 'createJob']);
             Route::get('/jobs',      [ClientController::class, 'myJobs']);
             Route::get('/jobs/{serviceJob}', [ClientController::class, 'jobDetail']);
+            Route::put("/jobs/{serviceJob}",      [ClientController::class, "updateJob"]);
+            Route::delete("/jobs/{serviceJob}",   [ClientController::class, "deleteJob"]);
 
             Route::get('/jobs/{serviceJob}/applicants',       [ClientController::class, 'jobApplicants']);
             Route::post('/jobs/{serviceJob}/accept-artisan',  [ClientController::class, 'acceptArtisan']);
@@ -118,6 +125,8 @@ Route::prefix('v1')->group(function () {
             Route::post('/jobs/{serviceJob}/decline',  [ArtisanController::class, 'declineJob']);
 
             Route::get('/jobs/{serviceJob}', [ArtisanController::class, 'jobDetail']);
+            Route::put("/jobs/{serviceJob}",      [ClientController::class, "updateJob"]);
+            Route::delete("/jobs/{serviceJob}",   [ClientController::class, "deleteJob"]);
 
             Route::post('/jobs/{serviceJob}/inspection', [ArtisanController::class, 'submitInspection']);
             Route::post('/jobs/{serviceJob}/scope', [ArtisanController::class, 'submitScopeClassification']);
@@ -206,7 +215,37 @@ Route::prefix('v1')->group(function () {
             Route::get('/conversations/{chatThread}/messages',  [ChatController::class, 'messages']);
             Route::post('/conversations/{chatThread}/messages', [ChatController::class, 'sendMessage']);
             Route::post('/conversations/{chatThread}/read',     [ChatController::class, 'markAsRead']);
+            Route::post('/conversations/{chatThread}/meta',     [ChatController::class, 'updateThreadMeta']);
             Route::post('/messages/{chatMessage}/flag',         [ChatController::class, 'flagMessage']);
+        });
+
+        // ═════════════════════════════════════════════════════
+        //  NOTIFICATIONS routes (shared — all authenticated users)
+        // ═════════════════════════════════════════════════════
+        Route::prefix('notifications')->group(function () {
+            Route::get('/',           [NotificationController::class, 'index']);
+            Route::post('/mark-read', [NotificationController::class, 'markRead']);
+            Route::post('/fcm-token', [NotificationController::class, 'updateFcmToken']);
+        });
+
+        // ═══════════════════════════════════════════════════════
+        //  PAYMENT GATEWAY routes
+        // ═══════════════════════════════════════════════════════
+        Route::prefix('payment')->group(function () {
+            Route::post('/paystack/initialize', [PaystackController::class, 'initialize']);
+            Route::post('/paystack/verify',     [PaystackController::class, 'verify']);
+            Route::post('/korapay/initialize',   [KoraPayController::class, 'initialize']);
+            Route::post('/korapay/verify',       [KoraPayController::class, 'verify']);
+        });
+
+        // ═══════════════════════════════════════════════════════
+        //  ESCROW routes (authenticated clients)
+        // ═══════════════════════════════════════════════════════
+        Route::prefix('escrow')->group(function () {
+            Route::get('/{jobId}',              [EscrowController::class, 'show']);
+            Route::post('/fund',                [EscrowController::class, 'fund']);
+            Route::post('/{jobId}/fund-remaining', [EscrowController::class, 'fundRemaining']);
+            Route::get('/{jobId}/transactions', [EscrowController::class, 'transactions']);
         });
     });
 

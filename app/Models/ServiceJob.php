@@ -40,6 +40,7 @@ class ServiceJob extends Model
     public function quotes()       { return $this->hasMany(Quote::class, 'service_job_id'); }
     public function reviews()      { return $this->hasMany(Review::class, 'service_job_id'); }
     public function payments()     { return $this->hasMany(Payment::class, 'service_job_id'); }
+    public function escrow()       { return $this->hasOne(Escrow::class, 'job_id'); }
     public function inspectionReports() { return $this->hasMany(InspectionReport::class); }
     public function materialRequests()  { return $this->hasMany(MaterialRequest::class); }
 

@@ -40,22 +40,31 @@ class ArtisanController extends Controller
         $user    = $request->user();
         $profile = $this->getOrCreateProfile($user->id);
 
-        $activeStatuses = ['accepted', 'inspectionScheduled', 'inspected',
-            'scopeClassified', 'quoted', 'quoteAdminReview', 'quoteReady',
-            'quoteApproved', 'escrowFunded', 'workInProgress',
-            'completionPending', 'completionApproved'];
+        $activeStatuses = [
+            'inspected', 'scopeClassified', 'quoted', 'quoteAdminReview', 
+            'quoteReady', 'workInProgress', 'completionPending', 'completionApproved'
+        ];
+        
+        $scheduledStatuses = [
+            'accepted', 'quoteApproved', 'escrowFunded'
+        ];
+
+        // Combine both for the "Active Jobs" list shown on the dashboard natively
+        $allActiveOrScheduled = array_merge($activeStatuses, $scheduledStatuses);
 
         $activeJobs = ServiceJob::where('artisan_id', $user->id)
-            ->whereIn('status', $activeStatuses)
+            ->whereIn('status', $allActiveOrScheduled)
             ->latest()->take(5)->get()->map->toApiArray()->toArray();
 
         $wallet = Wallet::firstOrCreate(['user_id' => $user->id]);
 
         return response()->json([
             'profile'           => $profile->toApiArray(),
-            'activeJobCount'    => ServiceJob::where('artisan_id', $user->id)
+            'activeJobCount'    => \App\Models\ServiceJob::where('artisan_id', $user->id)
                 ->whereIn('status', $activeStatuses)->count(),
-            'completedJobCount' => ServiceJob::where('artisan_id', $user->id)
+            'scheduledJobCount' => \App\Models\ServiceJob::where('artisan_id', $user->id)
+                ->whereIn('status', $scheduledStatuses)->count(),
+            'completedJobCount' => \App\Models\ServiceJob::where('artisan_id', $user->id)
                 ->where('status', 'completed')->count(),
             'activeJobs'        => $activeJobs,
             'walletBalance'     => $wallet->balance,
@@ -102,11 +111,28 @@ class ArtisanController extends Controller
         }
 
         $profile = $this->getOrCreateProfile($user->id);
+
+        $activeStatuses = [
+            'inspected', 'scopeClassified', 'quoted', 'quoteAdminReview', 
+            'quoteReady', 'workInProgress', 'completionPending', 'completionApproved'
+        ];
+        
+        $scheduledStatuses = [
+            'accepted', 'quoteApproved', 'escrowFunded'
+        ];
+
         $activeCount = ServiceJob::where('artisan_id', $user->id)
-            ->whereNotIn('status', ['created', 'completed', 'closed', 'cancelled'])
+            ->whereIn('status', $activeStatuses)
             ->count();
-        if ($activeCount >= 3) {
-            return response()->json(['message' => 'Workload limit reached (max 3 concurrent jobs)'], 422);
+            
+        $scheduledCount = ServiceJob::where('artisan_id', $user->id)
+            ->whereIn('status', $scheduledStatuses)
+            ->count();
+
+        if ($activeCount >= 2 || $scheduledCount >= 1) {
+            return response()->json([
+                'message' => "Workload limit reached (Max: 2 Active, 1 Scheduled). You currently have $activeCount active and $scheduledCount scheduled jobs."
+            ], 422);
         }
 
         $serviceJob->update([
@@ -114,8 +140,19 @@ class ArtisanController extends Controller
             'status'      => 'accepted',
             'accepted_at' => now(),
         ]);
+        
+        // Notify Client
+        if ($serviceJob->client) {
+            $serviceJob->client->notify(new \App\Notifications\JobEventNotification(
+                'Job Accepted',
+                "Your job has been accepted by an artisan.",
+                $serviceJob->id,
+                'job_accepted'
+            ));
+        }
 
-        $profile->increment('current_active_jobs');
+        // Scheduled job increments immediately because status goes to 'accepted'
+        $profile->increment('current_scheduled_jobs');
 
         return response()->json($serviceJob->fresh()->toApiArray());
     }
@@ -308,6 +345,16 @@ class ArtisanController extends Controller
             'status'             => 'quoted',
             'quote_submitted_at' => now(),
         ]);
+        
+        // Notify Client
+        if ($serviceJob->client) {
+            $serviceJob->client->notify(new \App\Notifications\JobEventNotification(
+                'Quote Submitted',
+                "The artisan has submitted a quote for your review.",
+                $serviceJob->id,
+                'quote_submitted'
+            ));
+        }
 
         return response()->json(
             array_merge($quote->fresh()->toApiArray(), [
@@ -493,6 +540,16 @@ class ArtisanController extends Controller
             'progress_percent' => 100,
             'completed_at'     => now(),
         ]);
+
+        // Notify Client
+        if ($serviceJob->client) {
+            $serviceJob->client->notify(new \App\Notifications\JobEventNotification(
+                'Work Completion Pending',
+                "The artisan has requested completion approval.",
+                $serviceJob->id,
+                'completion_pending'
+            ));
+        }
 
         return response()->json($serviceJob->fresh()->toApiArray());
     }

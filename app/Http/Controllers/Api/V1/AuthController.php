@@ -280,6 +280,30 @@ class AuthController extends Controller
         ]);
     }
 
+    // ───────────────────────────── Firebase Token ──────────────────────────
+    public function firebaseToken(Request $request): JsonResponse
+    {
+        $userId = (string) $request->user()->id;
+
+        try {
+            $factory = (new \Kreait\Firebase\Factory)
+                ->withServiceAccount(base_path(env('FIREBASE_CREDENTIALS', 'firebase_credentials.json')));
+            
+            $auth = $factory->createAuth();
+            $customToken = $auth->createCustomToken($userId);
+
+            return response()->json([
+                'firebaseToken' => $customToken->toString(),
+            ]);
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::error('Firebase Token Error: ' . $e->getMessage());
+            return response()->json([
+                'message' => 'Failed to generate Firebase token.',
+                'error'   => app()->environment('local') ? $e->getMessage() : null,
+            ], 500);
+        }
+    }
+
     // ───────────────────────────── Logout ────────────────────────────────
     public function logout(Request $request): JsonResponse
     {
