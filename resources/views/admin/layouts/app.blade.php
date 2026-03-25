@@ -35,6 +35,7 @@
                     ['route' => 'admin.analytics',      'icon' => 'bar-chart-2',   'label' => 'Analytics'],
                     ['route' => 'admin.notifications',  'icon' => 'bell',          'label' => 'Notifications'],
                     ['route' => 'admin.settings',       'icon' => 'settings',      'label' => 'Settings'],
+                    ['route' => 'admin.api-settings',    'icon' => 'key',           'label' => 'API Settings'],
                     ['route' => 'admin.activity-logs',  'icon' => 'clipboard-list','label' => 'Activity Logs'],
                 ];
             @endphp

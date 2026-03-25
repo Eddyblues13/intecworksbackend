@@ -12,8 +12,9 @@ use App\Models\OtpVerification;
 use App\Models\Payment;
 use App\Models\PlatformSetting;
 use App\Models\ServiceJob;
+use App\Models\Setting;
 use App\Models\User;
-use App\Models\VerificationDocument;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -28,11 +29,11 @@ class DashboardController extends Controller
     private function logActivity(string $action, ?string $targetType = null, ?int $targetId = null, ?array $details = null): void
     {
         AdminActivityLog::create([
-            'admin_id'    => $this->admin()->id,
-            'action'      => $action,
+            'admin_id' => $this->admin()->id,
+            'action' => $action,
             'target_type' => $targetType,
-            'target_id'   => $targetId,
-            'details'     => $details,
+            'target_id' => $targetId,
+            'details' => $details,
         ]);
     }
 
@@ -43,14 +44,14 @@ class DashboardController extends Controller
     public function index()
     {
         $stats = [
-            'totalUsers'     => User::count(),
-            'totalClients'   => User::where('role', 'client')->count(),
-            'totalArtisans'  => User::where('role', 'artisan')->count(),
+            'totalUsers' => User::count(),
+            'totalClients' => User::where('role', 'client')->count(),
+            'totalArtisans' => User::where('role', 'artisan')->count(),
             'totalSuppliers' => User::where('role', 'supplier')->count(),
-            'activeJobs'     => ServiceJob::whereNotIn('status', ['completed', 'cancelled', 'closed'])->count(),
-            'completedJobs'  => ServiceJob::where('status', 'completed')->count(),
-            'totalOrders'    => MaterialOrder::count(),
-            'platformRevenue'=> Payment::where('status', 'completed')->sum('amount'),
+            'activeJobs' => ServiceJob::whereNotIn('status', ['completed', 'cancelled', 'closed'])->count(),
+            'completedJobs' => ServiceJob::where('status', 'completed')->count(),
+            'totalOrders' => MaterialOrder::count(),
+            'platformRevenue' => Payment::where('status', 'completed')->sum('amount'),
         ];
 
         $pendingVerifications = User::where('account_status', 'verification_under_review')
@@ -80,8 +81,8 @@ class DashboardController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -123,7 +124,7 @@ class DashboardController extends Controller
     {
         $user = User::findOrFail($userId);
         $this->logActivity('deleted_user', 'user', $user->id, [
-            'name'  => $user->full_name,
+            'name' => $user->full_name,
             'email' => $user->email,
         ]);
         $user->delete();
@@ -160,8 +161,8 @@ class DashboardController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('full_name', 'like', "%{$search}%")
-                  ->orWhere('email', 'like', "%{$search}%")
-                  ->orWhere('phone', 'like', "%{$search}%");
+                    ->orWhere('email', 'like', "%{$search}%")
+                    ->orWhere('phone', 'like', "%{$search}%");
             });
         }
 
@@ -170,11 +171,11 @@ class DashboardController extends Controller
 
         // Stage counts for the filter badges
         $stageCounts = [
-            'all'                       => User::whereIn('account_status', ['otp_pending', 'verification_pending', 'verification_under_review', 'rejected'])->count(),
-            'otp_pending'               => User::where('account_status', 'otp_pending')->count(),
-            'verification_pending'      => User::where('account_status', 'verification_pending')->count(),
+            'all' => User::whereIn('account_status', ['otp_pending', 'verification_pending', 'verification_under_review', 'rejected'])->count(),
+            'otp_pending' => User::where('account_status', 'otp_pending')->count(),
+            'verification_pending' => User::where('account_status', 'verification_pending')->count(),
             'verification_under_review' => User::where('account_status', 'verification_under_review')->count(),
-            'rejected'                  => User::where('account_status', 'rejected')->count(),
+            'rejected' => User::where('account_status', 'rejected')->count(),
         ];
 
         return view('admin.verifications.index', compact('users', 'stageCounts'));
@@ -184,7 +185,7 @@ class DashboardController extends Controller
     {
         $user = User::with(['verificationDocuments', 'otpVerifications'])->findOrFail($userId);
         $otpHistory = $user->otpVerifications()->latest()->get();
-        $latestDoc  = $user->verificationDocuments()->latest()->first();
+        $latestDoc = $user->verificationDocuments()->latest()->first();
 
         return view('admin.verifications.show', compact('user', 'otpHistory', 'latestDoc'));
     }
@@ -194,7 +195,7 @@ class DashboardController extends Controller
         $user = User::findOrFail($userId);
         $newStatus = $user->role === 'supplier' ? 'subscription_required' : 'active';
         $user->update([
-            'account_status'   => $newStatus,
+            'account_status' => $newStatus,
             'rejection_reason' => null,
         ]);
 
@@ -202,7 +203,7 @@ class DashboardController extends Controller
         $latestDoc = $user->verificationDocuments()->where('status', 'pending')->latest()->first();
         if ($latestDoc) {
             $latestDoc->update([
-                'status'      => 'approved',
+                'status' => 'approved',
                 'reviewed_at' => now(),
             ]);
         }
@@ -218,7 +219,7 @@ class DashboardController extends Controller
 
         $user = User::findOrFail($userId);
         $user->update([
-            'account_status'   => 'rejected',
+            'account_status' => 'rejected',
             'rejection_reason' => $request->input('reason'),
         ]);
 
@@ -226,9 +227,9 @@ class DashboardController extends Controller
         $latestDoc = $user->verificationDocuments()->where('status', 'pending')->latest()->first();
         if ($latestDoc) {
             $latestDoc->update([
-                'status'           => 'rejected',
+                'status' => 'rejected',
                 'rejection_reason' => $request->input('reason'),
-                'reviewed_at'      => now(),
+                'reviewed_at' => now(),
             ]);
         }
 
@@ -286,7 +287,7 @@ class DashboardController extends Controller
 
         // If advancing to active or approved, also mark phone as verified if not already
         if (in_array($data['new_status'], ['active', 'approved', 'subscription_required'])) {
-            if (!$user->phone_verified_at) {
+            if (! $user->phone_verified_at) {
                 $user->update(['phone_verified_at' => now()]);
             }
         }
@@ -298,13 +299,13 @@ class DashboardController extends Controller
         }
 
         $user->update([
-            'account_status'   => $newStatus,
+            'account_status' => $newStatus,
             'rejection_reason' => null,
         ]);
 
         $this->logActivity('advanced_user_status', 'user', $user->id, [
             'from' => $oldStatus,
-            'to'   => $newStatus,
+            'to' => $newStatus,
         ]);
 
         return back()->with('success', "Status updated from '{$oldStatus}' to '{$newStatus}' for {$user->full_name}.");
@@ -324,7 +325,7 @@ class DashboardController extends Controller
         if ($search = $request->query('search')) {
             $query->where(function ($q) use ($search) {
                 $q->where('description', 'like', "%{$search}%")
-                  ->orWhere('location', 'like', "%{$search}%");
+                    ->orWhere('location', 'like', "%{$search}%");
             });
         }
 
@@ -346,7 +347,7 @@ class DashboardController extends Controller
 
         $job = ServiceJob::findOrFail($jobId);
         $job->update([
-            'is_flagged'     => true,
+            'is_flagged' => true,
             'flagged_reason' => $request->input('reason'),
         ]);
 
@@ -461,16 +462,16 @@ class DashboardController extends Controller
     {
         $data = $request->validate([
             'resolution' => 'required|string|in:resolved,dismissed',
-            'notes'      => 'nullable|string',
+            'notes' => 'nullable|string',
         ]);
 
         $dispute = Dispute::findOrFail($disputeId);
         $dispute->update([
-            'status'        => $data['resolution'],
-            'resolution'    => $data['resolution'],
-            'admin_notes'   => $data['notes'] ?? null,
-            'resolved_by_id'=> $this->admin()->id,
-            'resolved_at'   => now(),
+            'status' => $data['resolution'],
+            'resolution' => $data['resolution'],
+            'admin_notes' => $data['notes'] ?? null,
+            'resolved_by_id' => $this->admin()->id,
+            'resolved_at' => now(),
         ]);
 
         $this->logActivity('resolved_dispute', 'dispute', $dispute->id);
@@ -486,10 +487,10 @@ class DashboardController extends Controller
     {
         $period = $request->query('period', '30d');
         $days = match ($period) {
-            '7d'  => 7,
+            '7d' => 7,
             '30d' => 30,
             '90d' => 90,
-            '1y'  => 365,
+            '1y' => 365,
             default => 30,
         };
 
@@ -510,10 +511,10 @@ class DashboardController extends Controller
             ->groupBy('category_id')->get();
 
         $summary = [
-            'new_users'     => User::where('created_at', '>=', $from)->count(),
+            'new_users' => User::where('created_at', '>=', $from)->count(),
             'total_revenue' => Payment::where('status', 'completed')->where('created_at', '>=', $from)->sum('amount'),
-            'jobs_posted'   => ServiceJob::where('created_at', '>=', $from)->count(),
-            'total_orders'  => MaterialOrder::where('created_at', '>=', $from)->count(),
+            'jobs_posted' => ServiceJob::where('created_at', '>=', $from)->count(),
+            'total_orders' => MaterialOrder::where('created_at', '>=', $from)->count(),
         ];
 
         return view('admin.analytics', compact('userGrowth', 'revenue', 'jobsByCategory', 'summary', 'period'));
@@ -533,15 +534,15 @@ class DashboardController extends Controller
     public function sendBroadcast(Request $request)
     {
         $data = $request->validate([
-            'title'       => 'required|string|max:255',
-            'body'        => 'required|string',
+            'title' => 'required|string|max:255',
+            'body' => 'required|string',
             'target_role' => 'nullable|string|in:client,artisan,supplier',
         ]);
 
         $notification = BroadcastNotification::create([
-            'admin_id'    => $this->admin()->id,
-            'title'       => $data['title'],
-            'body'        => $data['body'],
+            'admin_id' => $this->admin()->id,
+            'title' => $data['title'],
+            'body' => $data['body'],
             'target_role' => $data['target_role'] ?? null,
         ]);
 
@@ -557,7 +558,7 @@ class DashboardController extends Controller
     public function settings()
     {
         $commission = PlatformSetting::getValue('commission_percent', 10);
-        $toggles    = PlatformSetting::getValue('feature_toggles', []);
+        $toggles = PlatformSetting::getValue('feature_toggles', []);
 
         return view('admin.settings', compact('commission', 'toggles'));
     }
@@ -577,6 +578,50 @@ class DashboardController extends Controller
     }
 
     // ══════════════════════════════════════════════
+    //  API SETTINGS
+    // ══════════════════════════════════════════════
+
+    public function apiSettings()
+    {
+        $keys = [
+            'paystack_public_key',
+            'paystack_secret_key',
+            'korapay_public_key',
+            'korapay_secret_key',
+            'korapay_encryption_key',
+        ];
+
+        $settings = [];
+        foreach ($keys as $key) {
+            $settings[$key] = Setting::get($key, '');
+        }
+
+        return view('admin.api-settings', compact('settings'));
+    }
+
+    public function updateApiSettings(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'paystack_public_key' => 'nullable|string|max:255',
+            'paystack_secret_key' => 'nullable|string|max:255',
+            'korapay_public_key' => 'nullable|string|max:255',
+            'korapay_secret_key' => 'nullable|string|max:255',
+            'korapay_encryption_key' => 'nullable|string|max:255',
+        ]);
+
+        foreach ($data as $key => $value) {
+            Setting::updateOrCreate(
+                ['key' => $key],
+                ['value' => $value ?? '', 'type' => 'string']
+            );
+        }
+
+        $this->logActivity('updated_api_settings', 'settings', null);
+
+        return back()->with('success', 'API settings saved successfully.');
+    }
+
+    // ══════════════════════════════════════════════
     //  PROFILE
     // ══════════════════════════════════════════════
 
@@ -591,14 +636,20 @@ class DashboardController extends Controller
     {
         $admin = $this->admin();
         $data = $request->validate([
-            'name'  => 'sometimes|string|min:2',
-            'email' => 'sometimes|email|unique:admins,email,' . $admin->id,
+            'name' => 'sometimes|string|min:2',
+            'email' => 'sometimes|email|unique:admins,email,'.$admin->id,
             'phone' => 'sometimes|string',
         ]);
 
-        if (isset($data['name']))  $admin->full_name = $data['name'];
-        if (isset($data['email'])) $admin->email     = $data['email'];
-        if (isset($data['phone'])) $admin->phone     = $data['phone'];
+        if (isset($data['name'])) {
+            $admin->full_name = $data['name'];
+        }
+        if (isset($data['email'])) {
+            $admin->email = $data['email'];
+        }
+        if (isset($data['phone'])) {
+            $admin->phone = $data['phone'];
+        }
         $admin->save();
 
         $this->logActivity('updated_profile', 'admin', $admin->id);
@@ -609,13 +660,13 @@ class DashboardController extends Controller
     public function changePassword(Request $request)
     {
         $data = $request->validate([
-            'current_password'      => 'required|string',
-            'password'              => 'required|string|min:8|confirmed',
+            'current_password' => 'required|string',
+            'password' => 'required|string|min:8|confirmed',
         ]);
 
         $admin = $this->admin();
 
-        if (!Hash::check($data['current_password'], $admin->password)) {
+        if (! Hash::check($data['current_password'], $admin->password)) {
             return back()->withErrors(['current_password' => 'Current password is incorrect.']);
         }
 

@@ -11,10 +11,15 @@ use Filament\Pages\Page;
 
 class ManageSettings extends Page
 {
-    protected static ?string $navigationIcon = 'heroicon-o-cog-6-tooth';
-    protected static ?string $navigationLabel = 'Settings';
-    protected static ?string $title = 'Application Settings';
-    protected static ?int $navigationSort = 99;
+    protected static ?string $navigationIcon = 'heroicon-o-key';
+
+    protected static ?string $navigationGroup = 'API Settings';
+
+    protected static ?string $navigationLabel = 'Payment Gateways';
+
+    protected static ?string $title = 'Payment Gateway API Keys';
+
+    protected static ?int $navigationSort = 1;
 
     protected static string $view = 'filament.admin.pages.manage-settings';
 
@@ -24,11 +29,11 @@ class ManageSettings extends Page
     public function mount(): void
     {
         $this->data = [
-            'paystack_public_key'     => Setting::get('paystack_public_key', ''),
-            'paystack_secret_key'     => Setting::get('paystack_secret_key', ''),
-            'korapay_public_key'      => Setting::get('korapay_public_key', ''),
-            'korapay_secret_key'      => Setting::get('korapay_secret_key', ''),
-            'korapay_encryption_key'  => Setting::get('korapay_encryption_key', ''),
+            'paystack_public_key' => Setting::get('paystack_public_key', ''),
+            'paystack_secret_key' => Setting::get('paystack_secret_key', ''),
+            'korapay_public_key' => Setting::get('korapay_public_key', ''),
+            'korapay_secret_key' => Setting::get('korapay_secret_key', ''),
+            'korapay_encryption_key' => Setting::get('korapay_encryption_key', ''),
         ];
     }
 
